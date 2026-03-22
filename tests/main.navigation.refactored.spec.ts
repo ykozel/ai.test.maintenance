@@ -40,9 +40,9 @@ test.describe('Main page navigation', () => {
   });
 
   test('should display navigation links: Docs, API, Community', async ({ playwrightDevPage }) => {
-    await test.step('Docs link is visible', () => expect(playwrightDevPage.docsLink).toBeVisible());
-    await test.step('API link is visible', () => expect(playwrightDevPage.apiLink).toBeVisible());
-    await test.step('Community link is visible', () => expect(playwrightDevPage.communityLink).toBeVisible());
+    for (const { name, locator } of NAV_LINKS) {
+      await test.step(`${name} link is visible`, () => expect(locator(playwrightDevPage)).toBeVisible());
+    }
   });
 
   for (const { name, locator, navigate, href, urlPattern } of NAV_LINKS) {

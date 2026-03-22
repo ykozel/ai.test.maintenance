@@ -107,6 +107,27 @@ The original test suite had 11 identified issues across selector quality, synchr
 **Benefit:** The HTML report and trace viewer show exactly which step failed (e.g. `"Docs link is visible"` or `href is "/docs/intro"`), cutting investigation time.
 
 ---
+SDET detected and manually fixed
+## 10. Data-Driven Visibility Test (`main.navigation.refactored.spec.ts`)
+
+**Problem:** The visibility test (`should display navigation links: Docs, API, Community`) was originally written as three hardcoded `test.step` calls — one per link — using direct property references (`playwrightDevPage.docsLink`, etc.). This was inconsistent with the rest of the suite, which already used the `NAV_LINKS` data table for role, href, and navigation tests.
+
+**Fix:** The three hardcoded steps were replaced with a single `for` loop over `NAV_LINKS` inside the test body:
+
+```typescript
+test('should display navigation links: Docs, API, Community', async ({ playwrightDevPage }) => {
+  for (const { name, locator } of NAV_LINKS) {
+    await test.step(`${name} link is visible`, () => expect(locator(playwrightDevPage)).toBeVisible());
+  }
+});
+```
+
+**Benefit:**
+- Adding or renaming a nav link requires a single change in the `NAV_LINKS` array — the visibility test updates automatically alongside role, href, and navigation tests.
+- Each link's visibility is reported as an individually named step in the HTML report.
+- The entire spec now has a single, consistent pattern for all per-link assertions.
+
+---
 
 ## Before / After Metrics
 
@@ -118,6 +139,7 @@ The original test suite had 11 identified issues across selector quality, synchr
 | Nav links with full click + URL coverage | 1 (Docs only) | 3 (Docs, API, Community) |
 | Tautological assertions | 1 | 0 |
 | Duplicated test blocks for nav links | 3 separate blocks | 1 data-driven loop |
+| Hardcoded visibility steps inconsistent with data table | 3 | 0 |
 | Dead locators | 1 (`pageTitle`) | 0 |
 | Tests with named steps | 0 | 4 |
 | Total tests passing | 9 | 10 |
