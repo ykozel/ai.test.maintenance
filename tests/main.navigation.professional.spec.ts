@@ -108,7 +108,8 @@ test.describe('Main page navigation', { tag: '@navigation' }, () => {
     const origin = new URL(playwrightDevPage.page.url()).origin;
 
     for (const { name, locator, navigate } of NAV_LINKS) {
-      // Re-navigate to home before each iteration so the starting state is clean
+      // Return to home before each link so each iteration starts from a clean state.
+      // The fixture's initial goto() covers the first iteration at negligible cost.
       await playwrightDevPage.goto();
 
       const link = locator(playwrightDevPage);

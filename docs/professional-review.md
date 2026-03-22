@@ -156,6 +156,44 @@ test('TC-NAV-001-F: nav links navigate in the same tab and stay on the same orig
 The 2 additional tests are TC-NAV-001-E and TC-NAV-001-F.
 
 ---
+// SDET detected improvement
+## Post-Review Improvement — TC-NAV-001-F Loop Readability
+
+After the professional spec was written, the `for` loop inside TC-NAV-001-F was simplified following a readability review.
+
+**Before:**
+```typescript
+for (let i = 0; i < NAV_LINKS.length; i++) {
+  const { name, locator, navigate } = NAV_LINKS[i];
+
+  // The fixture already navigates to home before the test; only restore
+  // after the first iteration when navigate() has moved to another page.
+  if (i > 0) await playwrightDevPage.goto();
+
+  const link = locator(playwrightDevPage);
+  // ...
+}
+```
+
+**After:**
+```typescript
+for (const { name, locator, navigate } of NAV_LINKS) {
+  // Return to home before each link so each iteration starts from a clean state.
+  // The fixture's initial goto() covers the first iteration at negligible cost.
+  await playwrightDevPage.goto();
+
+  const link = locator(playwrightDevPage);
+  // ...
+}
+```
+
+**Why:** The index-based loop introduced a conditional (`if (i > 0)`) to skip the first `goto()` as a micro-optimisation. This made the intent harder to read and inconsistent with the `for...of` pattern used in every other loop in the file. Replacing it with an unconditional `goto()` at the top of each iteration:
+
+- Keeps the loop idiomatic and consistent with the rest of the spec
+- Makes the "clean state before each link" intent explicit without conditional logic
+- Trades one redundant navigation (fast, same-page reload) for readability — an acceptable cost in a test suite
+
+---
 
 ## Findings Addressed
 
@@ -167,6 +205,7 @@ The 2 additional tests are TC-NAV-001-E and TC-NAV-001-F.
 | F-04 — Unexplained loop pattern | ❌ | ✅ Block comment added |
 | F-05 — Loose Community URL regex | ❌ | ✅ Anchored with `$` |
 | F-06 — No edge-case tests | ❌ | ✅ TC-NAV-001-E + TC-NAV-001-F |
+| Loop readability (TC-NAV-001-F) | ❌ index-based | ✅ `for...of` + unconditional `goto()` |
 | F-07 — No keyboard nav test | ❌ | ❌ Out of scope for this file |
 | F-08 — No mobile viewport project | ❌ | ❌ Config-level change, separate task |
 | F-09 — No focus-visibility check | ❌ | ❌ Requires CSS evaluation |
