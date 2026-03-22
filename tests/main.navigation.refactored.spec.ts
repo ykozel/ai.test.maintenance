@@ -59,4 +59,3 @@ test.describe('Main page navigation', () => {
     });
   }
 });
-

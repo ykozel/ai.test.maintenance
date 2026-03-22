@@ -1,18 +1,14 @@
-import { test, expect } from '@playwright/test';
-import { PlaywrightDevPage } from '../pages/playwright-dev-page';
+import { test, expect } from './fixtures';
 
 test.describe('playwright.dev homepage', () => {
-  test('has title', async ({ page }) => {
-    const playwrightDev = new PlaywrightDevPage(page);
-    await playwrightDev.goto();
-    await expect(page).toHaveTitle(/Playwright/);
+  test('has title', async ({ playwrightDevPage }) => {
+    await expect(playwrightDevPage.page).toHaveTitle(/Playwright/);
   });
 
-  test('get started link navigates to installation page', async ({ page }) => {
-    const playwrightDev = new PlaywrightDevPage(page);
-    await playwrightDev.goto();
-    await playwrightDev.navigateToGetStarted();
-    await expect(page).toHaveURL(/.*intro/);
-    await expect(playwrightDev.installationHeading).toBeVisible();
+  test('get started link navigates to installation page', async ({ playwrightDevPage }) => {
+    await playwrightDevPage.navigateToGetStarted();
+    await expect(playwrightDevPage.page).toHaveURL(/.*intro/);
+    await expect(playwrightDevPage.installationHeading).toBeVisible();
   });
 });
+
