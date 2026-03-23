@@ -32,19 +32,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: yarn
+          cache: npm
 
       # Install dependencies reproducibly; fails if lockfile is out of date
       - name: Install dependencies
-        run: yarn install --immutable --immutable-cache --check-cache
+        run: npm ci
 
       # Install Playwright browsers and their OS-level dependencies
       - name: Install Playwright browsers
-        run: yarn playwright install --with-deps
+        run: npx playwright install --with-deps
 
       # Run the full Playwright test suite in parallel
       - name: Run Playwright tests
-        run: yarn playwright test
+        run: npx playwright test
 
       # Always upload the HTML report so failures are diagnosable
       - name: Upload HTML report
