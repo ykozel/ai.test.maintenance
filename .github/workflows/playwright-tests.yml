@@ -9,9 +9,10 @@ concurrency:
   group: playwright-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# Least-privilege: CI only needs to read repo contents
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   playwright-tests:
@@ -32,19 +33,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: yarn
+          cache: npm
 
       # Install dependencies reproducibly; fails if lockfile is out of date
       - name: Install dependencies
-        run: yarn install --immutable --immutable-cache --check-cache
+        run: npm ci
 
       # Install Playwright browsers and their OS-level dependencies
       - name: Install Playwright browsers
-        run: yarn playwright install --with-deps
+        run: npx playwright install --with-deps
 
       # Run the full Playwright test suite in parallel
       - name: Run Playwright tests
-        run: yarn playwright test
+        run: npx playwright test
 
       # Always upload the HTML report so failures are diagnosable
       - name: Upload HTML report
@@ -63,3 +64,105 @@ jobs:
           name: playwright-traces
           path: test-results/**/trace*.zip
           retention-days: 14
+
+      # Notify Teams channel when the workflow fails
+      - name: Notify Microsoft Teams on failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{
+              "@type": "MessageCard",
+              "@context": "https://schema.org/extensions",
+              "summary": "Playwright Tests Failed",
+              "themeColor": "FF0000",
+              "title": "❌ Playwright Tests Failed",
+              "sections": [{
+                "facts": [
+                  { "name": "PR Title",  "value": "${{ github.event.pull_request.title }}" },
+                  { "name": "PR Author", "value": "${{ github.event.pull_request.user.login }}" },
+                  { "name": "Branch",    "value": "${{ github.head_ref }}" },
+                  { "name": "Run URL",   "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" }
+                ]
+              }]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_URL }}"
+
+      # Fetch existing history.json from gh-pages (if any) and append current run record
+      - name: Build history.json
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          HISTORY_FILE="playwright-report/history.json"
+          ENTRY=$(node -e "
+            const entry = {
+              timestamp: new Date().toISOString(),
+              runUrl: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              sha: '${{ github.sha }}',
+              ref: '${{ github.ref }}',
+              conclusion: '${{ job.status }}'
+            };
+            process.stdout.write(JSON.stringify(entry));
+          ")
+
+          # Try to fetch history from the gh-pages branch; ignore errors if branch/file absent
+          PREV="[]"
+          git fetch origin gh-pages 2>/dev/null && \
+            PREV=$(git show origin/gh-pages:history.json 2>/dev/null || echo "[]") || true
+
+          node -e "
+            const prev = JSON.parse(process.env.PREV);
+            const entry = JSON.parse(process.env.ENTRY);
+            prev.push(entry);
+            require('fs').writeFileSync('$HISTORY_FILE', JSON.stringify(prev, null, 2));
+          " PREV="$PREV" ENTRY="$ENTRY"
+
+      # Upload playwright-report/ (including history.json) as the Pages artifact
+      - name: Upload Pages artifact
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
+      # Deploy the artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
+
+  security-scan:
+    name: security-scan
+    runs-on: ubuntu-latest
+    continue-on-error: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run dependency vulnerability scan
+        id: audit
+        run: |
+          echo "## Dependency Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=high --json | tee audit-output.json | \
+            node -e "
+              const data = require('fs').readFileSync('/dev/stdin','utf8');
+              const report = JSON.parse(data);
+              const vulns = report.metadata?.vulnerabilities ?? {};
+              const lines = [
+                '| Severity | Count |',
+                '|---|---|',
+                \`| Critical | \${vulns.critical ?? 0} |\`,
+                \`| High     | \${vulns.high ?? 0} |\`,
+                \`| Moderate | \${vulns.moderate ?? 0} |\`,
+                \`| Low      | \${vulns.low ?? 0} |\`,
+              ];
+              lines.forEach(l => require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, l + '\n'));
+            " || true
+          npm audit --audit-level=high
